@@ -1,0 +1,22 @@
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+.venv/
+venv/
+.env
+.env.local
+results/
+runs/
+runs_rescued/
+.DS_Store
+
+# vendored references — fetched on demand by scripts/setup_references.sh
+references/
+references/.git/
+references/*/.git/
+
+# data
+*.parquet
+data/cache/
