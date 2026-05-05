@@ -1,27 +1,24 @@
 # Reflective Advisor Evolution
 
-GEPA-evolved Actor → Diagnose → Advise → Revise compound programs that steer a frozen black-box LLM, without ever updating the actor's weights.
-
-The full genealogy of the work — thesis, design, empirical record, methodological audit, open questions — is at [docs/LOG.md](docs/LOG.md).
+An experiment attempting to combine scaffold Advisor models (https://arxiv.org/pdf/2510.02453) to reflect/GEPA upon itself and also addressing the over-advising bug in the original paper. 
+Running updates at [docs/LOG.md](docs/LOG.md).
 
 ## Background and motivation
 
-This project sits at the intersection of two recent lines of work on test-time control of language models:
+For context, this project sits at the intersection of two recent lines of work on test-time control of language models (both from SkyLabs at Berkeley):
 
 - **Advisor Models** (Asawa et al. 2025, [arXiv:2510.02453](https://arxiv.org/abs/2510.02453)) — train a small advisor model with reinforcement learning to issue per-instance natural-language advice that steers a larger frozen actor. They report +12pp on RuleArena Taxes for GPT-4.1-mini (64.8% → 76.8%) and +71% relative for GPT-5.
 - **GEPA** (Agrawal et al. 2025, [arXiv:2507.19457](https://arxiv.org/abs/2507.19457)) — evolve textual prompts through reflection on per-example feedback, beating GRPO baselines with up to 35× fewer rollouts. GEPA compiles control policies into *text*; Advisor Models compiles them into *weights*.
 
-The thesis: these are two compilation targets for the same abstract object — a control policy over a frozen executor. The empirical question is:
+I wondered: these are two compilation targets to try and impose a control policy over a frozen executor. The empirical question is:
 
 > How much of a learned advisor policy can be compiled into **text** (evolved prompts) rather than into **weights** (an RL-trained advisor)?
 
 Define `G = J(π_weight) − J(π_text)`. `G ≈ 0` means text is a sufficient representational substrate for advisor policies; `G > 0` characterizes where context-as-control breaks.
 
-The deeper motivation comes from the **Dynamic Cheat Sheet (DCS)** lineage (Suzgun, Yuksekgonul, Bianchi, Jurafsky, Zou, [arXiv:2504.07952](https://arxiv.org/abs/2504.07952)): a frozen model maintains a persistent text memory of strategies it writes for itself, retrieves at inference, and reuses. DCS demonstrates this works empirically (≈+27pp on AIME 2024 with Claude 3.5; Game-of-24 from ~10% to ~99% on GPT-4o). What DCS leaves open is *which property* of an entry causes the gain. The advisor compilation question is one way to attack the *when-to-add-an-entry* and *when-not-to-retrieve* sides of that curation problem.
+## Experimental Setup
 
-## What's in this repo
-
-A 4-module compound program where the same frozen actor plays four prompt-driven roles. GEPA evolves all four prompts simultaneously, with per-module typed feedback engineered to surface over-advising regressions and abstention failures.
+A compound program where the same frozen actor plays four prompt-driven roles. GEPA evolves all four prompts simultaneously, with per-module typed feedback engineered to overcome over-advising by allowing the advisor to abstain when there is no failure/drift. 
 
 ```
               ┌────────────┐
@@ -144,7 +141,7 @@ The work in this repo builds directly on:
 - Agrawal, L. A. et al. (2025). *GEPA: Reflective Prompt Evolution Can Outperform Reinforcement Learning.* arXiv:[2507.19457](https://arxiv.org/abs/2507.19457). Code: [github.com/gepa-ai/gepa](https://github.com/gepa-ai/gepa).
 - Suzgun, M., Yuksekgonul, M., Bianchi, F., Jurafsky, D., & Zou, J. (2025). *Dynamic Cheat Sheet: Test-Time Learning with Adaptive Memory.* arXiv:[2504.07952](https://arxiv.org/abs/2504.07952).
 
-Adjacent / contextual:
+Other context that drew inspirations
 
 - Yuksekgonul, M., Koceja, D., Li, X., Bianchi, F. et al. (2026). *Learning to Discover at Test Time (TTT-Discover).* arXiv:[2601.16175](https://arxiv.org/abs/2601.16175).
 - Liang, W., Sun, Y., Nan, S., Li, C., Song, D., & Kawaguchi, K. (2026). *Strategy Executability in Mathematical Reasoning.* arXiv:[2602.22583](https://arxiv.org/abs/2602.22583).
