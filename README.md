@@ -2,6 +2,8 @@
 
 GEPA-evolved Actor → Diagnose → Advise → Revise compound programs that steer a frozen black-box LLM, without ever updating the actor's weights.
 
+The full genealogy of the work — thesis, design, empirical record, methodological audit, open questions — is at [docs/LOG.md](docs/LOG.md).
+
 ## Background and motivation
 
 This project sits at the intersection of two recent lines of work on test-time control of language models:
@@ -15,7 +17,7 @@ The thesis: these are two compilation targets for the same abstract object — a
 
 Define `G = J(π_weight) − J(π_text)`. `G ≈ 0` means text is a sufficient representational substrate for advisor policies; `G > 0` characterizes where context-as-control breaks.
 
-The deeper motivation comes from the **Dynamic Cheat Sheet (DCS)** lineage (Suzgun, Yuksekgonul, Bianchi, Jurafsky, Zou, [arXiv:2504.07952](https://arxiv.org/abs/2504.07952)): a frozen model maintains a persistent text memory of strategies it writes for itself, retrieves at inference, and reuses. DCS demonstrates this works empirically (≈+27pp on AIME 2024 with Claude 3.5; Game-of-24 from ~10% to ~99% on GPT-4o). What DCS leaves open is *which property* of an entry causes the gain — fluency, similarity-match, structure, or actual strategy content. The advisor compilation question is one way to attack the *when-to-add-an-entry* and *when-not-to-retrieve* sides of that curation problem.
+The deeper motivation comes from the **Dynamic Cheat Sheet (DCS)** lineage (Suzgun, Yuksekgonul, Bianchi, Jurafsky, Zou, [arXiv:2504.07952](https://arxiv.org/abs/2504.07952)): a frozen model maintains a persistent text memory of strategies it writes for itself, retrieves at inference, and reuses. DCS demonstrates this works empirically (≈+27pp on AIME 2024 with Claude 3.5; Game-of-24 from ~10% to ~99% on GPT-4o). What DCS leaves open is *which property* of an entry causes the gain. The advisor compilation question is one way to attack the *when-to-add-an-entry* and *when-not-to-retrieve* sides of that curation problem.
 
 ## What's in this repo
 
@@ -50,37 +52,9 @@ The `actor_revise` chat layout matches `advisor_models/rule_arena/env.py:_build_
 
 ### Per-module reflective feedback (the GEPA lever)
 
-Per the GEPA paper §5 ("feedback engineering"), the *richness* of textual feedback fed to the reflection LM matters more than scalar reward. Our adapter (`src/rae/gepa_adapter.py`) synthesizes per-module diagnostics:
+Per the GEPA paper §5 ("feedback engineering"), the *richness* of textual feedback fed to the reflection LM matters more than scalar reward. The adapter (`src/rae/gepa_adapter.py`) synthesizes per-module diagnostics calling out format failures, missing schema, over-advising regressions, missed repairs, and silence-vs-emit decisions. These are the strings the reflection LM mutates against.
 
-- `actor_solve` — format-line missing, draft already correct (over-advising risk), wrong magnitude vs wrong sign.
-- `advisor_diagnose` — missing FAILURE_MODE/EVIDENCE schema, generic critique rather than concrete error citation.
-- `advisor_advise` — emitted advice on already-correct draft (over-advising regression), suppressed advice on wrong draft (failure to find leverage), advice too long (solution leakage risk).
-- `actor_revise` — regression (broke a correct draft), repair (fixed a wrong draft), or no-effect.
-
-These are the strings the reflection LM mutates against.
-
-## What we found
-
-Two empirical campaigns:
-
-**RuleArena Taxes — strong actor (Qwen-72B-AWQ).** Both variants failed to recover the standalone actor baseline:
-
-| Variant | Budget | Seed dev | Best dev | Holdout |
-|---|---|---|---|---|
-| Actor-only GEPA (replicates Asawa's static-GEPA baseline) | 80 | 0.067 | 0.067 | 0.067 |
-| Full 4-module compound GEPA | 160 | 0.000 | 0.067 | **0.000** |
-
-Transition matrix on the full-compound holdout: 6.7% R→W (correct flipped to wrong), 0% W→R (wrong corrected), 93.3% W→W. **Recall on the should-stay-silent class was 0%** — the scaffold issued advice on every single held-out problem. It never learned when *not* to advise. This reproduces Asawa et al.'s own finding that static GEPA on the actor alone doesn't recover the standalone baseline; the 4-module scaffold doesn't fix it.
-
-**MATH ZPD — weaker actor (Qwen-7B).** Both variants got +13.3pp dev lift on a signal-rich pass-rate slice; the full scaffold's heldout drop was smaller (–7pp vs –33pp for actor-only), but neither reached a defensible publication signal.
-
-## Methodological audit
-
-The empirical regime above holds the evolved scaffold to **GEPA-style train / dev / holdout discipline**: GEPA evolves on train+dev, then the *frozen* evolved candidate is evaluated on a held-out set the model has never seen.
-
-That regime is stricter than the **DCS lineage** we were trying to extend. DCS is fundamentally an *online learning* claim — the cheatsheet accumulates during evaluation, so frozen-then-test discipline doesn't even test the DCS hypothesis. The proper DCS-style evaluation — let the scaffold continue evolving across the eval stream — has not yet been run on this codebase.
-
-The strict-holdout failure here should be read as **"frozen evolved scaffold doesn't transfer under strict discipline"**, not as **"text-space steering is broken in the DCS regime."** Re-running with online accumulation across the eval stream is the natural next experiment.
+Concrete empirical record, transition-matrix decompositions, the activation-probe campaign, and the methodological audit are in [docs/LOG.md](docs/LOG.md).
 
 ## Setup
 
@@ -154,15 +128,12 @@ tests/
   test_surface_features.py
   test_gated_eval.py
 
-reports/
-  results.md                 # curated empirical summary
-  status-overnight-2026-04-20.md
-
 scripts/
-  setup_references.sh        # fetches advisor-models, gepa, RuleArena
-  launch_exp4_exp5.sh        # parallel-launch helper for the two RuleArena runs
+  setup_references.sh             # fetches advisor-models, gepa, RuleArena
+  launch_rule_arena_taxes.sh      # parallel-launch helper for the two RuleArena runs
 
-RESEARCH_LOG.md              # detailed iteration log (preserved provenance)
+docs/
+  LOG.md                          # genealogy: thesis, design, empirical record, audit, open
 ```
 
 ## References
