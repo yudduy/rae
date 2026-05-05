@@ -18,34 +18,36 @@ Define `G = J(π_weight) − J(π_text)`. `G ≈ 0` means text is a sufficient r
 
 ## Experimental Setup
 
-A compound program where the same frozen actor plays four prompt-driven roles. GEPA evolves all four prompts simultaneously, with per-module typed feedback engineered to overcome over-advising by allowing the advisor to abstain when there is no failure/drift. 
+The actor is **frozen end-to-end** — weights and prompts pinned to Asawa et al.'s defaults — and **GEPA evolves only the advisor**'s two prompts (`advisor_diagnose` and `advisor_advise`) using feedback from downstream task performance. Per-module typed feedback rewards abstention when there is no failure or drift, so the advisor learns silence as a positive behaviour rather than only learning to talk.
 
 ```
-              ┌────────────┐
-problem ───▶ │ actor_solve│ ─▶ draft
-              └────────────┘
-                      │
-                      ▼
-              ┌──────────────────┐
-draft + ──▶ │ advisor_diagnose │ ─▶ FAILURE_MODE + EVIDENCE
-problem      └──────────────────┘
-                      │
-                      ▼
-              ┌────────────────┐
-diagnosis ─▶ │ advisor_advise │ ─▶ concrete hint  | NO_ADVICE
-              └────────────────┘
-                      │
-       ┌──────────────┴───────────────┐
-       │                              │
-   NO_ADVICE                       advice
-       │                              │
-       ▼                              ▼
-   draft = final              ┌──────────────┐
-                              │ actor_revise │ ─▶ final
-                              └──────────────┘
+              ┌────────────────────────────────────┐
+              │ actor_solve   (FROZEN)             │
+problem ───▶ │   = Asawa STUDENT_SYSTEM_PROMPT    │ ─▶ draft
+              └────────────────────────────────────┘
+                       │
+                       ▼
+              ┌────────────────────────────────────┐
+draft + ──▶ │ advisor_diagnose   (GEPA-evolved)  │ ─▶ FAILURE_MODE + EVIDENCE  |  NO_DRIFT
+problem      └────────────────────────────────────┘
+                       │
+                       ▼
+              ┌────────────────────────────────────┐
+diagnosis ─▶ │ advisor_advise    (GEPA-evolved)   │ ─▶ concrete hint  |  NO_ADVICE
+              └────────────────────────────────────┘
+                       │
+       ┌───────────────┴────────────────┐
+       │                                │
+   NO_ADVICE                         advice
+       │                                │
+       ▼                                ▼
+   draft = final                ┌────────────────────────────────────┐
+                                │ actor_revise   (FROZEN)            │
+                                │   = Asawa revise instruction       │ ─▶ final
+                                └────────────────────────────────────┘
 ```
 
-The `actor_revise` chat layout matches `advisor_models/rule_arena/env.py:_build_student_prompt` verbatim — `[system=actor_solve] [user=question] [assistant=draft] [user=advice + actor_revise]` — so any GEPA delta is attributable to scaffold evolution rather than chat-layout changes. The `compute_score` evaluator has parity tests against Asawa et al.'s published implementation (`tests/test_evaluator.py`).
+`actor_solve` is pinned to `STUDENT_SYSTEM_PROMPT` from `advisor_models/rule_arena/config.py`; `actor_revise` is pinned to the published revise-turn chat layout `[system=actor_solve] [user=question] [assistant=draft] [user=advice + actor_revise]` from `advisor_models/rule_arena/env.py:_build_student_prompt`. Any GEPA delta is attributable to the **advisor's text-compiled policy**, not to drift in the actor's instructions. The `compute_score` evaluator has parity tests against Asawa et al.'s published implementation (`tests/test_evaluator.py`).
 
 ### Per-module reflective feedback (the GEPA lever)
 

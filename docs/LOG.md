@@ -32,45 +32,47 @@ The deeper motivation comes from the **Dynamic Cheat Sheet (DCS)** lineage (Suzg
 
 ---
 
-## 2. Design — the 4-module compound program
+## 2. Design — advisor-only GEPA on a frozen actor
 
-A compound program with four mutable textual modules, all running on the same frozen actor. GEPA evolves all four:
+The actor is frozen end-to-end. Weights stay at the published checkpoint; the actor's solve-time system prompt and revise-turn instruction are pinned to Asawa et al.'s `STUDENT_SYSTEM_PROMPT` and published revise-prompt chat layout. **GEPA evolves only the advisor**'s two prompts (`advisor_diagnose` and `advisor_advise`), using feedback from downstream task performance.
 
 ```
-              ┌────────────┐
-problem ───▶ │ actor_solve│ ─▶ draft
-              └────────────┘
-                      │
-                      ▼
-              ┌──────────────────┐
-draft + ──▶ │ advisor_diagnose │ ─▶ FAILURE_MODE + EVIDENCE
-problem      └──────────────────┘
-                      │
-                      ▼
-              ┌────────────────┐
-diagnosis ─▶ │ advisor_advise │ ─▶ concrete hint  | NO_ADVICE
-              └────────────────┘
-                      │
-       ┌──────────────┴───────────────┐
-       │                              │
-   NO_ADVICE                       advice
-       │                              │
-       ▼                              ▼
-   draft = final              ┌──────────────┐
-                              │ actor_revise │ ─▶ final
-                              └──────────────┘
+              ┌────────────────────────────────────┐
+              │ actor_solve   (FROZEN)             │
+problem ───▶ │   = Asawa STUDENT_SYSTEM_PROMPT    │ ─▶ draft
+              └────────────────────────────────────┘
+                       │
+                       ▼
+              ┌────────────────────────────────────┐
+draft + ──▶ │ advisor_diagnose   (GEPA-evolved)  │ ─▶ FAILURE_MODE + EVIDENCE  |  NO_DRIFT
+problem      └────────────────────────────────────┘
+                       │
+                       ▼
+              ┌────────────────────────────────────┐
+diagnosis ─▶ │ advisor_advise    (GEPA-evolved)   │ ─▶ concrete hint  |  NO_ADVICE
+              └────────────────────────────────────┘
+                       │
+       ┌───────────────┴────────────────┐
+       │                                │
+   NO_ADVICE                         advice
+       │                                │
+       ▼                                ▼
+   draft = final                ┌────────────────────────────────────┐
+                                │ actor_revise   (FROZEN)            │
+                                │   = Asawa revise instruction       │ ─▶ final
+                                └────────────────────────────────────┘
 ```
 
-The `actor_revise` chat layout matches `advisor_models/rule_arena/env.py:_build_student_prompt` verbatim — `[system=actor_solve] [user=question] [assistant=draft] [user=advice + actor_revise]`. This pins our results to the published Advisor Models baselines so any GEPA delta is attributable to scaffold evolution rather than chat-layout changes.
+`actor_revise` matches `advisor_models/rule_arena/env.py:_build_student_prompt` verbatim — `[system=actor_solve] [user=question] [assistant=draft] [user=advice + actor_revise]` — so any GEPA delta is attributable to the **advisor's text-compiled policy**, not to drift in the actor's instructions. This mirrors Asawa's setup as cleanly as possible: they hold the student fixed and train the advisor's *weights*; we hold the student fixed in every sense and evolve the advisor's *text*.
 
-### Why four modules, not three
+### Why two advisor modules, not one
 
-Asawa's flow is **three steps**: actor solves → advisor advises → actor revises, with the advisor being a separate RL-trained model. GEPA needs separable text components to mutate. We split the advisor's behavior into two prompts:
+Asawa's flow is three steps: actor solves → advisor advises → actor revises. The advisor in their setup is a single neural net producing advice from `(problem, draft)`. To give GEPA's reflection LM a cleaner target, we split the advisor's behaviour into two prompt-mutable components:
 
-- `advisor_diagnose` — produces a structured `FAILURE_MODE + EVIDENCE` schema, or declares no failure.
+- `advisor_diagnose` — produces a structured `FAILURE_MODE + EVIDENCE` schema, or declares `NO_DRIFT`.
 - `advisor_advise` — reads the diagnosis and either emits a concrete hint or `NO_ADVICE`.
 
-This gives GEPA's reflection LM a cleaner target. *"The diagnose prompt should require concrete evidence"* and *"the advise prompt should suppress when evidence is weak"* are different mutations on different components.
+*"The diagnose prompt should require concrete evidence before flagging a failure"* and *"the advise prompt should suppress when the diagnosis is weak"* are different mutations on different components. Splitting them lets GEPA evolve the *should-I-intervene?* decision and the *what-to-say?* decision independently — which is the surface the abstention reward actually needs.
 
 ### Per-module reflective feedback (the GEPA lever)
 
